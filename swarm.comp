@@ -103,24 +103,27 @@ void main() {
     // ========================================================
     // SLICE 0 : CPU CORE -> GALACTIC OCEAN
     // ========================================================
-    if (id >= pc.offsets[0] &&
-        id < pc.offsets[0] + pc.counts[0]) {
+    if (id >= pc.offsets[0] && id < pc.offsets[0] + pc.counts[0]) {
 
-        float radial = length(selfPos.xz);
+        // THE FIX: Anchor the particle to the AVX2 CPU math!
+        vec3 cpuPos = vec3(inParticles[id].x, inParticles[id].y, inParticles[id].z);
+
+        float radial = length(cpuPos.xz);
 
         float wave =
             sin(radial * 0.0015 - pc.time * 2.0) +
-            cos(selfPos.x * 0.003 + pc.time * 0.7) +
-            sin(selfPos.z * 0.002 - pc.time * 1.3);
+            cos(cpuPos.x * 0.003 + pc.time * 0.7) +
+            sin(cpuPos.z * 0.002 - pc.time * 1.3);
 
+        // Reset finalPos to the CPU baseline before applying GPU distortions
+        finalPos = cpuPos; 
+        
         finalPos += vortex * 120.0;
-
         finalPos.y += wave * 450.0;
 
-        finalPos.x += sin(pc.time + selfPos.y * 0.0007) * 90.0;
-        finalPos.z += cos(pc.time + selfPos.x * 0.0007) * 90.0;
+        finalPos.x += sin(pc.time + cpuPos.y * 0.0007) * 90.0;
+        finalPos.z += cos(pc.time + cpuPos.x * 0.0007) * 90.0;
     }
-
     // ========================================================
     // SLICE 1 : QUANTUM LATTICE
     // ========================================================
