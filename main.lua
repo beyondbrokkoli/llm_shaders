@@ -14,6 +14,7 @@ Engine = {
     ParadoxBlend = 0.0,
     SpacePressedLast = false
 }
+
 -- ========================================================
 -- PILLAR 2: THE AVX2 MATH LIBRARY (VibeMath)
 -- ========================================================
@@ -108,7 +109,7 @@ function love_load()
     local use_avx2 = (Config.physics_mode == "CPU_AVX2" or Config.physics_mode == "HYBRID")
     memory.Init(vk, Engine.vk_context, use_avx2)
 
-    -- Setup Descriptors with the Quad-Buffer layout + Indirect
+    -- Setup Descriptors with the Quad-Buffer layout + Indirect + TEMPORAL GRIDS
     Engine.vk_descriptors = descriptors.Init(
         vk, Engine.vk_context.device,
         memory.Buffers["SwarmCPU_A"],
@@ -116,20 +117,23 @@ function love_load()
         memory.Buffers["SwarmPing"],
         memory.Buffers["SwarmPong"],
         memory.Buffers["DrawCmd_A"],
-        memory.Buffers["DrawCmd_B"]
+        memory.Buffers["DrawCmd_B"],
+        memory.Buffers["Grid_A"], -- <--- PATCHED IN
+        memory.Buffers["Grid_B"]  -- <--- PATCHED IN
     )
 
     local win_width, win_height = C_Bridge.getWindowSize()
     ExecuteVulkanRebuild(win_width, win_height, true)
 
-    -- CRITICAL: Keep 12 parameters so main.c doesn't crash
+    -- CRITICAL: Keep 14 parameters so main.c doesn't crash
     C_Bridge.submit_buffers(
         ptr2str(memory.Buffers["SwarmCPU_A"]), ptr2str(memory.Buffers["SwarmCPU_B"]),
         ptr2str(memory.Buffers["SwarmPing"]), ptr2str(memory.Buffers["SwarmPong"]),
         ptr2str(memory.Mapped["SwarmCPU_A"]), ptr2str(memory.Mapped["SwarmCPU_B"]),
         ptr2str(memory.Mapped["SwarmPing"]), ptr2str(memory.Mapped["SwarmPong"]),
         ptr2str(memory.Buffers["DrawCmd_A"]), ptr2str(memory.Buffers["DrawCmd_B"]),
-        ptr2str(memory.Mapped["DrawCmd_A"]), ptr2str(memory.Mapped["DrawCmd_B"])
+        ptr2str(memory.Mapped["DrawCmd_A"]), ptr2str(memory.Mapped["DrawCmd_B"]),
+        ptr2str(memory.Buffers["Grid_A"]), ptr2str(memory.Buffers["Grid_B"]) -- <--- PATCHED IN
     )
 
     -- LEGACY BIND: We pad with nil to avoid FFI signature panics based on your current vibemath.c
@@ -220,7 +224,7 @@ function love_update(dt, currentFrame)
         -- 2. Push the entire Memory Atlas to the GPU! (14 Arguments)
         C_Bridge.set_compute_push_constants(
             dt, Engine.Time, Engine.SwarmState, push_active, pull_active,
-            memory.TotalActive, 
+            memory.TotalActive,
             memory.Atlas.CpuCore.offset, memory.Atlas.CpuCore.count,
             memory.Atlas.Static.offset, memory.Atlas.Static.count,
             memory.Atlas.GpuBoids.offset, memory.Atlas.GpuBoids.count,
@@ -262,11 +266,11 @@ function love_keypressed(key)
     elseif key == 71 then -- 'G' Key
         -- Spawn 50,000 Newborn GPU Boids dynamically!
         memory.Atlas.GpuBoids.count = memory.Atlas.GpuBoids.count + 50000
-        
+
         -- Recalculate TotalActive (Simplistic rebuild of the atlas total)
-        memory.TotalActive = memory.Atlas.CpuCore.count + memory.Atlas.Static.count + 
+        memory.TotalActive = memory.Atlas.CpuCore.count + memory.Atlas.Static.count +
                              memory.Atlas.GpuBoids.count + memory.Atlas.GpuMeteors.count
-                             
+
         print("[SPAWN] Newborn GPU Boids added! Total Active: " .. memory.TotalActive)
     end
 end
