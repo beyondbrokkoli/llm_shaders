@@ -63,45 +63,58 @@ void main() {
     }
     
     // ========================================================
-    // SLICE 2: PARTICLE ACCELERATOR (Fast Boids)
+    // SLICE 2: TETHERED GPU BOIDS (Orbiting the AVX2 Core)
     // ========================================================
     else if (id >= pc.offsets[2] && id < pc.offsets[2] + pc.counts[2]) {
         uint local_id = id - pc.offsets[2]; 
-        uint h = pcg_hash(local_id);
         
-        // Counter-rotating rings of energy weaving through the cage
-        float radius = 17000.0 + (float(h & 0xFF) / 255.0) * 4000.0;
-        float speed = (local_id % 2 == 0) ? 2.5 : -2.5; 
-        float angle = (float((h >> 8) & 0xFFFF) / 65535.0 * 6.28318) + (pc.time * speed);
+        // 1. Pick a target CPU particle to act as the Anchor!
+        // We use modulo so the 2M GPU boids distribute evenly across the 5M CPU particles.
+        // NOTE: Make sure pc.offsets[1] matches your CPU slice index!
+        uint target_cpu_id = pc.offsets[1] + (local_id % pc.counts[1]);
 
-        finalPos.x = cos(angle) * radius;
-        finalPos.y = sin(pc.time * 1.5 + float(local_id) * 0.01) * 8000.0; 
-        finalPos.z = sin(angle) * radius;
-        
-        materialID = 2.8; // High energy sparks!
+        // 2. Read the live, AVX2-calculated position of that anchor
+        vec3 anchorPos = vec3(inParticles[target_cpu_id].x, 
+                              inParticles[target_cpu_id].y, 
+                              inParticles[target_cpu_id].z);
+
+        // 3. Generate procedural GPU offsets
+        uint h = pcg_hash(local_id);
+        float rand1 = float(h & 0xFFFF) / 65535.0;
+        float rand2 = float((h >> 16) & 0xFFFF) / 65535.0;
+
+        // Tight radius right around the individual CPU particle
+        float radius = 100.0 + (rand1 * 400.0);
+        float speed = 2.0 + (rand2 * 4.0);
+        float angle = (rand2 * 6.28318) + (pc.time * speed);
+
+        // 4. Combine! The GPU spark orbits the AVX2 anchor as it moves.
+        finalPos.x = anchorPos.x + cos(angle) * radius;
+        finalPos.y = anchorPos.y + sin(pc.time * 5.0 + float(local_id) * 0.1) * 150.0; 
+        finalPos.z = anchorPos.z + sin(angle) * radius;
     }
     
     // ========================================================
-    // SLICE 3: CORE ACCRETION (Meteors falling into the center)
+    // SLICE 3: GPU METEORS (Raining down onto the AVX2 Core)
     // ========================================================
     else if (id >= pc.offsets[3] && id < pc.offsets[3] + pc.counts[3]) {
         uint local_id = id - pc.offsets[3];
         uint h = pcg_hash(local_id);
         
-        float angle = (float(h & 0xFFFF) / 65535.0) * 6.28318;
-        float startRadius = 30000.0;
+        // Target a CPU particle
+        uint target_cpu_id = pc.offsets[1] + (local_id % pc.counts[1]);
+        vec3 targetPos = vec3(inParticles[target_cpu_id].x, 
+                              inParticles[target_cpu_id].y, 
+                              inParticles[target_cpu_id].z);
+
+        // Fall at incredibly high, randomized speeds
+        float speed = 8000.0 + (float(h % 1000) / 1000.0) * 12000.0;
         
-        float speed = 15000.0 + (float(h % 1000) / 1000.0) * 10000.0;
-        float fallTime = mod(pc.time * speed + float(local_id)*10.0, 40000.0);
-        
-        // As they fall, they get sucked into the X/Z center!
-        float currentRadius = max(0.0, startRadius - fallTime * 0.8);
-        
-        finalPos.x = cos(angle) * currentRadius;
-        finalPos.z = sin(angle) * currentRadius;
-        finalPos.y = 30000.0 - fallTime; 
-        
-        materialID = 3.9; // Max energy burning stars
+        // Height offsets dynamically falling toward the CPU target
+        float heightOffset = 30000.0 - mod(pc.time * speed + float(local_id)*50.0, 30000.0);
+
+        // Smash directly into the CPU particle!
+        finalPos = targetPos + vec3(0.0, heightOffset, 0.0); 
     }
 
     outParticles[id].x = finalPos.x;
