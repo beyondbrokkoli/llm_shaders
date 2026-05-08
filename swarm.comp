@@ -3,12 +3,23 @@ layout(local_size_x = 256) in;
 
 struct Particle { float x, y, z, pad; };
 
+// The Particle Buffers
 layout(std430, binding = 0) readonly buffer InSwarm { Particle inParticles[]; };
 layout(std430, binding = 1) writeonly buffer OutSwarm { Particle outParticles[]; };
 
+// The Command Buffer
 layout(std430, binding = 3) buffer DrawCmd {
     uint vertexCount; uint instanceCount; uint firstVertex; uint firstInstance;
 } drawCmd;
+
+// ========================================================
+// THE TEMPORAL PING-PONG GRIDS
+// ========================================================
+layout(std430, binding = 4) readonly buffer GridPast { uint gridP[]; };
+
+// Note: atomicExchange requires underlying read/write access in GLSL, 
+// so we must omit the 'writeonly' keyword here to prevent compiler errors.
+layout(std430, binding = 5) buffer GridFuture { uint gridF[]; };
 
 layout(push_constant) uniform PushConstants {
     float dt; float time; int state; int push; int pull;
@@ -22,109 +33,120 @@ uint pcg_hash(uint seed) {
     return (word >> 22u) ^ word;
 }
 
+// ========================================================
+// DUMMY SPATIAL HASH FUNCTION
+// ========================================================
+#define GRID_SIZE 128
+#define CELL_SIZE 500.0 // How big is a "bucket" in world space?
+
+uint GetCellIndex(vec3 pos) {
+    // 1. Shift the universe so we don't get negative indices
+    vec3 offsetPos = pos + vec3(GRID_SIZE * CELL_SIZE * 0.5);
+
+    // 2. Discretize space into buckets
+    ivec3 cell3D = ivec3(offsetPos / CELL_SIZE);
+
+    // 3. THE SILENT KILLER GUARD: Clamp perfectly to avoid VRAM segfaults
+    cell3D = clamp(cell3D, ivec3(0), ivec3(GRID_SIZE - 1));
+
+    // 4. Flatten 3D coordinates into a 1D index (Max = 2,097,151)
+    return uint(cell3D.x + cell3D.y * GRID_SIZE + cell3D.z * GRID_SIZE * GRID_SIZE);
+}
+
 void main() {
     uint id = gl_GlobalInvocationID.x;
     if (id >= pc.total_active_count) return;
 
     vec3 finalPos;
-    float materialID = 0.0; // The decimal holds energy, the integer holds the Slice ID
+    float materialID = 0.0; 
 
     // ========================================================
     // SLICE 0: CPU CORE (The AVX2 Singularity)
     // ========================================================
     if (id >= pc.offsets[0] && id < pc.offsets[0] + pc.counts[0]) {
         vec3 basePos = vec3(inParticles[id].x, inParticles[id].y, inParticles[id].z);
-        
-        // Gentle, stable water ripples over the CPU math
-        float ripple = sin((basePos.x * 0.01) + (pc.time * 2.0)) * 50.0 + 
+        float ripple = sin((basePos.x * 0.01) + (pc.time * 2.0)) * 50.0 +
                        cos((basePos.z * 0.01) + (pc.time * 2.0)) * 50.0;
-                       
         finalPos = basePos + vec3(0.0, ripple, 0.0);
-        
-        // Material 0.0 (Base) + Energy based on height
         materialID = 0.0 + clamp((finalPos.y + 10000.0) / 20000.0, 0.0, 0.99);
     }
-    
     // ========================================================
-    // SLICE 1: THE CONTAINMENT CAGE (Cylindrical Grid)
+    // SLICE 1: THE CONTAINMENT CAGE
     // ========================================================
     else if (id >= pc.offsets[1] && id < pc.offsets[1] + pc.counts[1]) {
         uint local_id = id - pc.offsets[1];
-        
-        // Wrap the grid in a cylinder around the CPU core
         float angle = float(local_id % 360) * (6.28318 / 360.0);
         float height = float(local_id / 360) * 150.0 - 15000.0;
-        float radius = 18000.0; // Containment perimeter
-        
+        float radius = 18000.0;
         float pulse = sin(pc.time * 3.0 + height * 0.001) * 500.0;
-        
         finalPos = vec3(cos(angle) * (radius + pulse), height, sin(angle) * (radius + pulse));
-        materialID = 1.5; // Fixed material ID for the cage
+        materialID = 1.5; 
     }
-    
     // ========================================================
-    // SLICE 2: TETHERED GPU BOIDS (Orbiting the AVX2 Core)
+    // SLICE 2: TETHERED GPU BOIDS
     // ========================================================
     else if (id >= pc.offsets[2] && id < pc.offsets[2] + pc.counts[2]) {
-        uint local_id = id - pc.offsets[2]; 
-        
-        // 1. Pick a target CPU particle to act as the Anchor!
-        // We use modulo so the 2M GPU boids distribute evenly across the 5M CPU particles.
-        // NOTE: Make sure pc.offsets[1] matches your CPU slice index!
+        uint local_id = id - pc.offsets[2];
         uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
-
-        // 2. Read the live, AVX2-calculated position of that anchor
-        vec3 anchorPos = vec3(inParticles[target_cpu_id].x, 
-                              inParticles[target_cpu_id].y, 
-                              inParticles[target_cpu_id].z);
-
-        // 3. Generate procedural GPU offsets
+        vec3 anchorPos = vec3(inParticles[target_cpu_id].x, inParticles[target_cpu_id].y, inParticles[target_cpu_id].z);
+        
         uint h = pcg_hash(local_id);
         float rand1 = float(h & 0xFFFF) / 65535.0;
         float rand2 = float((h >> 16) & 0xFFFF) / 65535.0;
 
-        // Tight radius right around the individual CPU particle
         float radius = 100.0 + (rand1 * 400.0);
         float speed = 2.0 + (rand2 * 4.0);
         float angle = (rand2 * 6.28318) + (pc.time * speed);
 
-        // 4. Combine! The GPU spark orbits the AVX2 anchor as it moves.
         finalPos.x = anchorPos.x + cos(angle) * radius;
-        finalPos.y = anchorPos.y + sin(pc.time * 5.0 + float(local_id) * 0.1) * 150.0; 
+        finalPos.y = anchorPos.y + sin(pc.time * 5.0 + float(local_id) * 0.1) * 150.0;
         finalPos.z = anchorPos.z + sin(angle) * radius;
     }
-    
     // ========================================================
-    // SLICE 3: GPU METEORS (Raining down onto the AVX2 Core)
+    // SLICE 3: GPU METEORS
     // ========================================================
     else if (id >= pc.offsets[3] && id < pc.offsets[3] + pc.counts[3]) {
         uint local_id = id - pc.offsets[3];
         uint h = pcg_hash(local_id);
-        
-        // Target a CPU particle
         uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
-        vec3 targetPos = vec3(inParticles[target_cpu_id].x, 
-                              inParticles[target_cpu_id].y, 
-                              inParticles[target_cpu_id].z);
+        vec3 targetPos = vec3(inParticles[target_cpu_id].x, inParticles[target_cpu_id].y, inParticles[target_cpu_id].z);
 
-        // Fall at incredibly high, randomized speeds
         float speed = 8000.0 + (float(h % 1000) / 1000.0) * 12000.0;
-        
-        // Height offsets dynamically falling toward the CPU target
         float heightOffset = 30000.0 - mod(pc.time * speed + float(local_id)*50.0, 30000.0);
-
-        // Smash directly into the CPU particle!
-        finalPos = targetPos + vec3(0.0, heightOffset, 0.0); 
+        finalPos = targetPos + vec3(0.0, heightOffset, 0.0);
     }
 
+    // ========================================================
+    // THE TEMPORAL LOCKSTEP PROVING GROUND
+    // ========================================================
+    uint myCell = GetCellIndex(finalPos);
+
+    // 1. READ FROM THE PAST
+    // We look at the grid from the previous frame. No race conditions!
+    uint pastNeighborID = gridP[myCell];
+
+    // DUMMY INTERACTION: If a neighbor was in this exact bucket last frame, 
+    // and it wasn't me, we trigger a visual "Collision Flash".
+    // We expect ID + 1 because 0 is our completely empty state (filled by vkCmdFillBuffer).
+    if (pastNeighborID != 0 && pastNeighborID != (id + 1)) {
+        materialID = 3.0; // Force the material/energy ID to glow bright white/red!
+    }
+
+    // 2. WRITE TO THE FUTURE
+    // Register ourselves in the new grid so someone can hit us next frame.
+    // 'atomicExchange' ensures no thread overwrites us halfway through a memory bus clock cycle.
+    atomicExchange(gridF[myCell], id + 1);
+
+    // 3. EXPORT
     outParticles[id].x = finalPos.x;
     outParticles[id].y = finalPos.y;
     outParticles[id].z = finalPos.z;
-    outParticles[id].pad = materialID; // SEND TO VERTEX SHADER!
+    outParticles[id].pad = materialID;
 
+    // Standard draw command reset
     if (id == 0) {
         drawCmd.vertexCount = pc.total_active_count;
-        drawCmd.instanceCount = 1; 
+        drawCmd.instanceCount = 1;
         drawCmd.firstVertex = 0;
         drawCmd.firstInstance = 0;
     }
