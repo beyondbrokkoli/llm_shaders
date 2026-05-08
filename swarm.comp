@@ -117,27 +117,61 @@ void main() {
     }
 
     // ========================================================
-    // THE TEMPORAL LOCKSTEP PROVING GROUND
+    // THE TEMPORAL LOCKSTEP FUSION
     // ========================================================
     uint myCell = GetCellIndex(finalPos);
 
     // 1. READ FROM THE PAST
-    // We look at the grid from the previous frame. No race conditions!
     uint pastNeighborID = gridP[myCell];
 
-    // DUMMY INTERACTION: If a neighbor was in this exact bucket last frame, 
-    // and it wasn't me, we trigger a visual "Collision Flash".
-    // We expect ID + 1 because 0 is our completely empty state (filled by vkCmdFillBuffer).
+    // If someone was in our bucket last frame, and it wasn't us...
     if (pastNeighborID != 0 && pastNeighborID != (id + 1)) {
-        materialID = 3.0; // Force the material/energy ID to glow bright white/red!
+        
+        uint actualNeighborID = pastNeighborID - 1; // Remove the +1 safety offset
+
+        // 2. THE MEMORY HEIST: 
+        // We know WHO hit us. Now we look up exactly WHERE they were.
+        // Because inParticles is readonly (it's the Past), this is 100% thread-safe!
+        vec3 intruderPos = vec3(inParticles[actualNeighborID].x, 
+                                inParticles[actualNeighborID].y, 
+                                inParticles[actualNeighborID].z);
+
+        // --- FUSION A: THE REACTIVE CAGE ---
+        if (id >= pc.offsets[1] && id < pc.offsets[1] + pc.counts[1]) {
+            // Make sure the cage is reacting to a Boid/Meteor/CPU, not another cage node
+            if (actualNeighborID < pc.offsets[1] || actualNeighborID >= pc.offsets[1] + pc.counts[1]) {
+                // The cage matrix violently snaps towards the intruder, catching them in a web
+                finalPos = mix(finalPos, intruderPos, 0.85); 
+                materialID = 4.0; // Flash ultra-bright Plasma Cyan
+            }
+        }
+        
+        // --- FUSION B: CPU CORE IMPACT CRATERS ---
+        else if (id >= pc.offsets[0] && id < pc.offsets[0] + pc.counts[0]) {
+            // Did a GPU Meteor (Slice 3) hit the CPU Core?
+            if (actualNeighborID >= pc.offsets[3]) {
+                // Blast the CPU particle away from the impact epicenter!
+                vec3 pushDir = normalize(finalPos - intruderPos);
+                finalPos += pushDir * 2500.0; // Huge physical cratering
+                finalPos.y -= 3000.0;         // Push it deep down
+                materialID = 3.0;             // Flash Core-Breach Red
+            } else {
+                // Just general CPU/Boid traffic
+                materialID = 2.0; // Gentle clustering glow
+            }
+        }
+        
+        // --- FUSION C: STANDARD BOID COLLISIONS ---
+        else {
+            // Boids hitting boids
+            materialID = 3.0; // Spark!
+        }
     }
 
-    // 2. WRITE TO THE FUTURE
-    // Register ourselves in the new grid so someone can hit us next frame.
-    // 'atomicExchange' ensures no thread overwrites us halfway through a memory bus clock cycle.
+    // 3. WRITE TO THE FUTURE
     atomicExchange(gridF[myCell], id + 1);
 
-    // 3. EXPORT
+    // 4. EXPORT
     outParticles[id].x = finalPos.x;
     outParticles[id].y = finalPos.y;
     outParticles[id].z = finalPos.z;
