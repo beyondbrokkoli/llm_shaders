@@ -1,62 +1,46 @@
-// render.vert
 #version 460
-
 layout(location = 0) in vec4 inPosition;
-
-layout(push_constant) uniform CameraInfo {
-    mat4 viewProj;
-} pc;
+layout(push_constant) uniform CameraInfo { mat4 viewProj; } pc;
 
 layout(location = 0) out vec3 vColor;
-layout(location = 1) out float vEnergy;
+layout(location = 1) out float vAlphaBase;
 
 void main() {
-    vec3 pos = inPosition.xyz;
-
-    vec4 clipPos = pc.viewProj * vec4(pos, 1.0);
-
+    vec4 clipPos = pc.viewProj * vec4(inPosition.xyz, 1.0);
     gl_Position = clipPos;
 
-    float dist = length(pos);
+    // Decode the Material ID and Energy from the pad channel
+    int sliceID = int(inPosition.w);
+    float energy = fract(inPosition.w);
+    
+    float pointSize = 1.0;
 
-    // energy from compute shader pad channel
-    vEnergy = inPosition.w;
+    // SLICE 0: CPU CORE (Deep Plasma + Cyan Highlights)
+    if (sliceID == 0) {
+        vec3 deep = vec3(0.1, 0.0, 0.3);
+        vec3 hot = vec3(0.0, 0.8, 1.0);
+        vColor = mix(deep, hot, energy);
+        vAlphaBase = 0.05;
+        pointSize = 4000.0 / clipPos.w; // Volumetric bloom
+    }
+    // SLICE 1: CONTAINMENT CAGE (Ghostly Orange Wireframe)
+    else if (sliceID == 1) {
+        vColor = vec3(1.0, 0.4, 0.0);
+        vAlphaBase = 0.03; // Very faint
+        pointSize = 1500.0 / clipPos.w; // Sharp, thin lines
+    }
+    // SLICE 2: ACCELERATOR BOIDS (Searing Pink Sparks)
+    else if (sliceID == 2) {
+        vColor = vec3(1.0, 0.0, 0.6);
+        vAlphaBase = 0.15; // Brighter
+        pointSize = 6000.0 / clipPos.w; // Large glowing orbs
+    }
+    // SLICE 3: METEORS (Blinding White/Blue)
+    else if (sliceID == 3) {
+        vColor = vec3(0.8, 0.9, 1.0);
+        vAlphaBase = 0.2; // Brightest
+        pointSize = 8000.0 / clipPos.w; // Massive streaks
+    }
 
-    // ========================================================
-    // COSMIC VOLUME PALETTE
-    // ========================================================
-
-    float band0 =
-        sin(pos.x * 0.00012 + vEnergy * 8.0);
-
-    float band1 =
-        sin(pos.y * 0.00008 + pos.z * 0.00015);
-
-    float band2 =
-        cos(dist * 0.00005 - vEnergy * 5.0);
-
-    vec3 deepSpace = vec3(
-        0.15 + band0 * 0.8,
-        0.20 + band1 * 0.7,
-        0.35 + band2 * 1.2
-    );
-
-    vec3 plasma = vec3(
-        sin(vEnergy * 10.0),
-        sin(vEnergy * 7.0 + 2.0),
-        sin(vEnergy * 13.0 + 4.0)
-    ) * 0.5 + 0.5;
-
-    vColor = mix(deepSpace, plasma * 2.0, vEnergy);
-
-    // ========================================================
-    // VOLUMETRIC STAR BLOOM
-    // ========================================================
-
-    float size =
-        14000.0 / max(clipPos.w, 1.0);
-
-    size *= (0.6 + vEnergy * 1.8);
-
-    gl_PointSize = clamp(size, 1.0, 14.0);
+    gl_PointSize = clamp(pointSize, 1.0, 8.0); 
 }
