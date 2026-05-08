@@ -155,10 +155,10 @@ function Memory.CreateHostVisibleBuffer(name, cdef_type, element_count, usage_fl
 
     local bufInfo = ffi.new("VkBufferCreateInfo")
     ffi.fill(bufInfo, ffi.sizeof(bufInfo))
-    bufInfo.sType = 12 
+    bufInfo.sType = 12
     bufInfo.size = byte_size
     bufInfo.usage = usage_flags
-    bufInfo.sharingMode = 0 
+    bufInfo.sharingMode = 0
 
     local pBuffer = ffi.new("VkBuffer[1]")
     local res = vk.vkCreateBuffer(core_state.device, bufInfo, nil, pBuffer)
@@ -190,12 +190,12 @@ end
 local function AllocateSoA(type_str, count, names)
     local base_type = string.gsub(type_str, "%[.-%]", "")
     local bytes_needed = ffi.sizeof(base_type) * count
-    local alloc_size = bytes_needed + 64 
+    local alloc_size = bytes_needed + 64
 
     for i = 1, #names do
         local name = names[i]
         local raw_bytes = ffi.new("uint8_t[?]", alloc_size)
-        Memory.Anchors[name] = raw_bytes 
+        Memory.Anchors[name] = raw_bytes
 
         local ptr_num = tonumber(ffi.cast("uintptr_t", raw_bytes))
         local offset = (64 - (ptr_num % 64)) % 64
@@ -236,6 +236,17 @@ function Memory.Init(vulkan_lib, core_state, use_avx2)
 
     print("[MEMORY] Allocated & Mapped Dual-Purpose Indirect Draw Buffer.")
 
+    -- ========================================================
+    -- THE TEMPORAL SPATIAL HASH GRIDS (Ping-Ponged!)
+    -- ========================================================
+    -- Mapped precisely to swarm.comp: GRID_SIZE 128 -> 128^3 = 2,097,152 cells
+    -- 160 = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT (128) | VK_BUFFER_USAGE_TRANSFER_DST_BIT (32)
+    -- (We need Transfer DST so vkCmdFillBuffer can zero it out in main.c)
+    local GRID_CELL_COUNT = 2097152 
+    Memory.CreateHostVisibleBuffer("Grid_A", "uint32_t", GRID_CELL_COUNT, 160, core_state) 
+    Memory.CreateHostVisibleBuffer("Grid_B", "uint32_t", GRID_CELL_COUNT, 160, core_state)
+    print("[MEMORY] Allocated & Mapped Temporal Spatial Hash Grids (A/B) - 8.3MB each.")
+
     -- B. ALLOCATE CPU RAM (Always required for seeding the universe!)
     print("[MEMORY] Allocating 64-byte Aligned SoA CPU Memory...")
 
@@ -258,6 +269,7 @@ function Memory.Init(vulkan_lib, core_state, use_avx2)
         pcall(function() Memory.RenderStruct[array_name] = array_ptr end)
     end
 end
+
 function Memory.Destroy(vk, core_state)
     print("[TEARDOWN] Deconstructing VRAM Buffers...")
     for name, buffer in pairs(Memory.Buffers) do
