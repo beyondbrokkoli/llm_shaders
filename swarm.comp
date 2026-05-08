@@ -71,7 +71,7 @@ void main() {
         // 1. Pick a target CPU particle to act as the Anchor!
         // We use modulo so the 2M GPU boids distribute evenly across the 5M CPU particles.
         // NOTE: Make sure pc.offsets[1] matches your CPU slice index!
-        uint target_cpu_id = pc.offsets[1] + (local_id % pc.counts[1]);
+        uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
 
         // 2. Read the live, AVX2-calculated position of that anchor
         vec3 anchorPos = vec3(inParticles[target_cpu_id].x, 
@@ -102,7 +102,7 @@ void main() {
         uint h = pcg_hash(local_id);
         
         // Target a CPU particle
-        uint target_cpu_id = pc.offsets[1] + (local_id % pc.counts[1]);
+        uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
         vec3 targetPos = vec3(inParticles[target_cpu_id].x, 
                               inParticles[target_cpu_id].y, 
                               inParticles[target_cpu_id].z);
