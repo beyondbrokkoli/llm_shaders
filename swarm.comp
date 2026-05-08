@@ -1,0 +1,120 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+struct Particle {
+    float x, y, z, pad;
+};
+
+layout(std430, binding = 0) readonly buffer InSwarm { Particle inParticles[]; };
+layout(std430, binding = 1) writeonly buffer OutSwarm { Particle outParticles[]; };
+
+layout(std430, binding = 3) buffer DrawCmd {
+    uint vertexCount;
+    uint instanceCount; 
+    uint firstVertex;
+    uint firstInstance;
+} drawCmd;
+
+// THE 56-BYTE ATLAS CONTRACT
+layout(push_constant) uniform PushConstants {
+    float dt;
+    float time;
+    int state;
+    int push;
+    int pull;
+    uint total_active_count;
+    uint offsets[4]; // 0:Static, 1:CpuCore, 2:GpuBoids, 3:GpuMeteors
+    uint counts[4];
+} pc;
+
+// Fast GPU PRNG for the Newborn particles
+uint pcg_hash(uint seed) {
+    uint state = seed * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+
+    // 1. THE ATLAS GUARD: Never read/write out of bounds
+    if (id >= pc.total_active_count) return;
+
+    vec3 finalPos;
+
+    // ========================================================
+    // THE BEHAVIOR ROUTER (Data-Oriented Slicing)
+    // ========================================================
+
+    // SLICE 0: CPU CORE (AVX2 Math + GPU Water Hax)
+    if (id >= pc.offsets[0] && id < pc.offsets[0] + pc.counts[0]) {
+        vec3 basePos = vec3(inParticles[id].x, inParticles[id].y, inParticles[id].z);
+        float ripple = sin((basePos.x * 0.02) + (pc.time * 2.5)) + cos((basePos.z * 0.02) + (pc.time * 2.5));
+        finalPos = basePos;
+        finalPos.y += ripple * 40.0; 
+    }
+    
+    // SLICE 1: THE QUANTUM GRID (Formerly Static)
+    else if (id >= pc.offsets[1] && id < pc.offsets[1] + pc.counts[1]) {
+        uint local_id = id - pc.offsets[1];
+        
+        float spacing = 2000.0;
+        uint gridSize = uint(pow(float(pc.counts[1]), 1.0/3.0)); // Make sure to use counts[1] here!
+        if (gridSize == 0) gridSize = 1;
+
+        float x = float(local_id % gridSize) * spacing - (float(gridSize)*spacing*0.5);
+        float y = float((local_id / gridSize) % gridSize) * spacing - (float(gridSize)*spacing*0.5);
+        float z = float(local_id / (gridSize * gridSize)) * spacing - (float(gridSize)*spacing*0.5);
+
+        float pulse = sin(pc.time * 2.0 + length(vec3(x,y,z)) * 0.0005) * 800.0;
+        finalPos = vec3(x, y + pulse, z);
+    }
+    
+    // SLICE 2: GPU AUTONOMOUS BOIDS (Unchanged Orbitals)
+    else if (id >= pc.offsets[2] && id < pc.offsets[2] + pc.counts[2]) {
+        uint local_id = id - pc.offsets[2]; 
+        uint h = pcg_hash(local_id);
+        float rand1 = float(h & 0xFFFF) / 65535.0;
+        float rand2 = float((h >> 16) & 0xFFFF) / 65535.0;
+
+        float radius = 12000.0 + (rand1 * 5000.0);
+        float angle = (rand2 * 6.28318) + (pc.time * 0.8);
+
+        finalPos.x = cos(angle) * radius;
+        finalPos.y = 5000.0 + sin(local_id * 0.1 + pc.time) * 2000.0; 
+        finalPos.z = sin(angle) * radius;
+    }
+    
+    // SLICE 3: THE VIBE METEORS (Hyper-speed rain through the core)
+    else if (id >= pc.offsets[3] && id < pc.offsets[3] + pc.counts[3]) {
+        uint local_id = id - pc.offsets[3];
+        uint h = pcg_hash(local_id);
+        
+        // Random spawn points in a massive skybox above the swarm
+        float startX = (float(h & 0xFFFF) / 65535.0) * 40000.0 - 20000.0;
+        float startZ = (float((h >> 16) & 0xFFFF) / 65535.0) * 40000.0 - 20000.0;
+
+        // Fall at incredibly high, randomized speeds
+        float speed = 10000.0 + (float(h % 1000) / 1000.0) * 15000.0;
+        
+        // Reset their Y position magically when they fall too far down
+        float yPos = 40000.0 - mod(pc.time * speed + float(local_id)*10.0, 80000.0);
+
+        finalPos = vec3(startX, yPos, startZ); 
+    }
+    // ========================================================
+    // THE UNIFIED WRITE
+    // ========================================================
+    outParticles[id].x = finalPos.x;
+    outParticles[id].y = finalPos.y;
+    outParticles[id].z = finalPos.z;
+    outParticles[id].pad = 1.0; 
+
+    if (id == 0) {
+        drawCmd.vertexCount = pc.total_active_count; // 7,000,000 Vertices
+        drawCmd.instanceCount = 1;                   // 1 Massive Swarm
+        drawCmd.firstVertex = 0;
+        drawCmd.firstInstance = 0;
+    }
+}
