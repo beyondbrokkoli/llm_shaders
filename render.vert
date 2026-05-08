@@ -1,25 +1,62 @@
+// render.vert
 #version 460
+
 layout(location = 0) in vec4 inPosition;
-layout(push_constant) uniform CameraInfo { mat4 viewProj; } pc;
+
+layout(push_constant) uniform CameraInfo {
+    mat4 viewProj;
+} pc;
 
 layout(location = 0) out vec3 vColor;
+layout(location = 1) out float vEnergy;
 
 void main() {
-    vec4 clipPos = pc.viewProj * vec4(inPosition.xyz, 1.0);
+    vec3 pos = inPosition.xyz;
+
+    vec4 clipPos = pc.viewProj * vec4(pos, 1.0);
+
     gl_Position = clipPos;
 
-    // VIBEMATH: Volumetric Spatial Color Hashing
-    // The color is derived from the particle's physical location in the universe
-    vec3 pos = inPosition.xyz * 0.0001; // Scale down so the gradients are wide and smooth
-    float r = sin(pos.x + pos.y) * 0.5 + 0.5;
-    float g = cos(pos.y + pos.z) * 0.5 + 0.5;
-    float b = sin(pos.z - pos.x) * 0.5 + 0.5;
+    float dist = length(pos);
 
-    // Boost the vibrance for that demoscene look
-    vColor = vec3(r, g, b) * 1.5;
+    // energy from compute shader pad channel
+    vEnergy = inPosition.w;
 
-    // Perspective point sizing (Bigger up close, tiny far away)
-    float pointSize = 6000.0 / clipPos.w;
-    // Allow slightly bigger points (up to 8.0) so the alpha blending overlaps beautifully
-    gl_PointSize = clamp(pointSize, 1.0, 8.0); 
+    // ========================================================
+    // COSMIC VOLUME PALETTE
+    // ========================================================
+
+    float band0 =
+        sin(pos.x * 0.00012 + vEnergy * 8.0);
+
+    float band1 =
+        sin(pos.y * 0.00008 + pos.z * 0.00015);
+
+    float band2 =
+        cos(dist * 0.00005 - vEnergy * 5.0);
+
+    vec3 deepSpace = vec3(
+        0.15 + band0 * 0.8,
+        0.20 + band1 * 0.7,
+        0.35 + band2 * 1.2
+    );
+
+    vec3 plasma = vec3(
+        sin(vEnergy * 10.0),
+        sin(vEnergy * 7.0 + 2.0),
+        sin(vEnergy * 13.0 + 4.0)
+    ) * 0.5 + 0.5;
+
+    vColor = mix(deepSpace, plasma * 2.0, vEnergy);
+
+    // ========================================================
+    // VOLUMETRIC STAR BLOOM
+    // ========================================================
+
+    float size =
+        14000.0 / max(clipPos.w, 1.0);
+
+    size *= (0.6 + vEnergy * 1.8);
+
+    gl_PointSize = clamp(size, 1.0, 14.0);
 }
