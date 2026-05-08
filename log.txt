@@ -1,0 +1,170 @@
+AzureAD+HalimOmarZaghdoudi@DESKTOP-BD3FFTI MINGW64 ~/llm_shaders
+$ git pull
+remote: Enumerating objects: 19, done.
+remote: Counting objects: 100% (19/19), done.
+remote: Compressing objects: 100% (6/6), done.
+remote: Total 13 (delta 9), reused 11 (delta 7), pack-reused 0 (from 0)
+Unpacking objects: 100% (13/13), 4.94 KiB | 36.00 KiB/s, done.
+From https://github.com/beyondbrokkoli/llm_shaders
+   f1ebaa6..363f94b  main       -> origin/main
+Updating f1ebaa6..363f94b
+Fast-forward
+ descriptors.lua |  71 ++++++++++++--------
+ main.c          | 277 +++++++++++++++++++++++-----------------------------------------------------
+ main.lua        |  20 +++---
+ memory.lua      |  20 ++++--
+ swarm.comp      | 114 ++++++++++++++++++-------------
+ 5 files changed, 224 insertions(+), 278 deletions(-)
+
+AzureAD+HalimOmarZaghdoudi@DESKTOP-BD3FFTI MINGW64 ~/llm_shaders
+$ lua build_orchestrator.lua win
+========================================
+   VIBE ENGINE BUILD ORCHESTRATOR
+   Target Platform: WIN
+========================================
+
+[1/3] Compiling SPIR-V Shaders...
+
+[2/3] Compiling AVX2 Physics Backend (.dll) ...
+
+[3/3] Compiling Vulkan Host (.exe) ...
+
+[4/4] Packing Windows Dependencies (DLLs)...
+  |- DLLs copied successfully.
+
+[SUCCESS] Engine build complete!
+
+
+--- AI SNAPSHOT ---
+
+AzureAD+HalimOmarZaghdoudi@DESKTOP-BD3FFTI MINGW64 ~/llm_shaders
+$ ./swarm_gpu.exe
+[BOOT] Starting Naked Bootloader...
+[DEBUG PROXY] Infecting module: memory
+[DEBUG PROXY] Infecting module: descriptors
+[DEBUG PROXY] Infecting module: swapchain
+[DEBUG PROXY] Infecting module: graphics_pipeline
+[DEBUG PROXY] Infecting module: compute_pipeline
+[LUA] Booting VibeEngine...
+[LUA] Initializing Vulkan Core...
+[LUA] Vulkan Instance Created!
+[BOOT] Validation Layer Enforcer injected successfully.
+[LUA] Window Surface Linked!
+[LUA] Hardware GPU Selected!
+[LUA] Logical Device Created!
+[DEBUG] Device Pointer in core:         cdata<struct VkDevice_T *>: 0x018e54390ed8
+[MEMORY] Initializing Unified Memory Manager...
+[MEMORY] ReBAR Supported! Streaming directly to VRAM.
+[MEMORY] Allocated & Mapped VRAM Buffer: SwarmCPU_A
+[MEMORY] ReBAR Supported! Streaming directly to VRAM.
+[MEMORY] Allocated & Mapped VRAM Buffer: SwarmCPU_B
+[MEMORY] ReBAR Supported! Streaming directly to VRAM.
+[MEMORY] Allocated & Mapped VRAM Buffer: SwarmPing
+[MEMORY] ReBAR Supported! Streaming directly to VRAM.
+[MEMORY] Allocated & Mapped VRAM Buffer: SwarmPong
+[MEMORY] ReBAR Supported! Streaming directly to VRAM.
+[MEMORY] Allocated & Mapped VRAM Buffer: Cage
+[MEMORY] ReBAR Supported! Streaming directly to VRAM.
+[MEMORY] Allocated & Mapped VRAM Buffer: DrawCmd_A
+[MEMORY] ReBAR Supported! Streaming directly to VRAM.
+[MEMORY] Allocated & Mapped VRAM Buffer: DrawCmd_B
+[MEMORY] Allocated & Mapped Dual-Purpose Indirect Draw Buffer.
+[MEMORY] ReBAR Supported! Streaming directly to VRAM.
+[MEMORY] Allocated & Mapped VRAM Buffer: Grid_A
+[MEMORY] ReBAR Supported! Streaming directly to VRAM.
+[MEMORY] Allocated & Mapped VRAM Buffer: Grid_B
+[MEMORY] Allocated & Mapped Temporal Spatial Hash Grids (A/B) - 8.3MB each.
+[MEMORY] Allocating 64-byte Aligned SoA CPU Memory...
+[PROFILER] memory.Init took 555.000 ms
+[DESCRIPTORS] Wiring Asynchronous Tandem Rendering Sets with Temporal Grids...
+[DESCRIPTORS] Asynchronous Tandem Rendering Sets successfully wired!
+[PROFILER] descriptors.Init took 2.000 ms
+[REBUILD] Building Swapchain and Pipelines...
+[SWAPCHAIN] Building the display chain...
+[SWAPCHAIN] Created successfully with 3 images!
+[PROFILER] swapchain.Init took 92.000 ms
+[GRAPHICS] Building Depth Buffer and Shader Modules...
+[GRAPHICS] Depth Buffer and Shader Modules Ready.
+[GRAPHICS] Graphics Pipeline Successfully Compiled!
+[PROFILER] graphics_pipeline.Init took 10.000 ms
+[COMPUTE] Compiling Swarm Intelligence...
+[COMPUTE] Swarm Pipeline Ready!
+[PROFILER] compute_pipeline.Init took 89.000 ms
+[C BRIDGE] Rebuilt VkDevice: 0000018e54390ed8
+[C BRIDGE] All 14 GPU Buffers (including Temporal Grids) locked.
+[INIT] VRAM Seeded with 7000000 Particles.
+[INIT] AVX2 Thread Pool Online.
+[INIT] Mouse Captured. Delta-reporting active.
+[BOOT] Entering Main Loop...
+[C DEBUG] 0. Extracting raw AMD driver functions...
+[C DEBUG] 1. Creating Command Pool...
+[C DEBUG] 2. Allocating Command Buffers...
+[C DEBUG] 3. Creating Sync Objects...
+[C DEBUG] 4. Launching the Render Loop!
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: vkCmdFillBuffer(): dstBuffer (VkBuffer 0x110000000011) was created with VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: vkCmdFillBuffer(): dstBuffer (VkBuffer 0x130000000013) was created with VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: vkCmdFillBuffer(): dstBuffer (VkBuffer 0x110000000011) was created with VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: vkCmdFillBuffer(): dstBuffer (VkBuffer 0x130000000013) was created with VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: vkCmdFillBuffer(): dstBuffer (VkBuffer 0x110000000011) was created with VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: vkCmdFillBuffer(): dstBuffer (VkBuffer 0x130000000013) was created with VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: vkCmdFillBuffer(): dstBuffer (VkBuffer 0x110000000011) was created with VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: vkCmdFillBuffer(): dstBuffer (VkBuffer 0x130000000013) was created with VK_BUFFER_USAGE_2_S
+TORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: vkCmdFillBuffer(): dstBuffer (VkBuffer 0x110000000011) was created with VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+
+[VULKAN LAYER ENFORCER]
+SEVERITY: 4096
+MESSAGE: (Warning - This VUID has now been reported 10 times, which is the duplicate_message_limit value, this will be the last time reporting it).
+vkCmdFillBuffer(): dstBuffer (VkBuffer 0x130000000013) was created with VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT but requires VK_BUFFER_USAGE_2_TRANSFER_DST_BIT.
+The Vulkan spec states: dstBuffer must have been created with the VK_BUFFER_USAGE_TRANSFER_DST_BIT usage flag set (https://docs.vulkan.org/spec/latest/chapters/clears.html#VUID-vkCmdFillBuffer-dstBuffer-00029)
+
+[STATE] Swarm Matrix Shifted to State: 1
+[STATE] Swarm Matrix Shifted to State: 2
+[STATE] Swarm Matrix Shifted to State: 3
+[STATE] Swarm Matrix Shifted to State: 4
+
