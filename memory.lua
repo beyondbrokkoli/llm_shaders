@@ -240,11 +240,10 @@ function Memory.Init(vulkan_lib, core_state, use_avx2)
     -- THE TEMPORAL SPATIAL HASH GRIDS (Ping-Ponged!)
     -- ========================================================
     -- Mapped precisely to swarm.comp: GRID_SIZE 128 -> 128^3 = 2,097,152 cells
-    -- 160 = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT (128) | VK_BUFFER_USAGE_TRANSFER_DST_BIT (32)
-    -- (We need Transfer DST so vkCmdFillBuffer can zero it out in main.c)
-    local GRID_CELL_COUNT = 2097152 
-    Memory.CreateHostVisibleBuffer("Grid_A", "uint32_t", GRID_CELL_COUNT, 160, core_state) 
-    Memory.CreateHostVisibleBuffer("Grid_B", "uint32_t", GRID_CELL_COUNT, 160, core_state)
+    -- 34 = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT (32) | VK_BUFFER_USAGE_TRANSFER_DST_BIT (2)
+    local GRID_CELL_COUNT = 2097152
+    Memory.CreateHostVisibleBuffer("Grid_A", "uint32_t", GRID_CELL_COUNT, 34, core_state)
+    Memory.CreateHostVisibleBuffer("Grid_B", "uint32_t", GRID_CELL_COUNT, 34, core_state)
     print("[MEMORY] Allocated & Mapped Temporal Spatial Hash Grids (A/B) - 8.3MB each.")
 
     -- B. ALLOCATE CPU RAM (Always required for seeding the universe!)
