@@ -42,5 +42,5 @@ void main() {
         pointSize = 8000.0 / clipPos.w; // Massive streaks
     }
 
-    gl_PointSize = clamp(pointSize, 1.0, 8.0); 
+    gl_PointSize = clamp(pointSize, 1.0, 1.0); 
 }
