@@ -1,0 +1,54 @@
+#version 450
+layout(local_size_x = 256) in;
+
+struct Particle { float x, y, z, pad; };
+
+// We don't even read the InSwarm or the Grids!
+layout(std430, binding = 1) writeonly buffer OutSwarm { Particle outParticles[]; };
+
+layout(std430, binding = 3) buffer DrawCmd {
+    uint vertexCount; uint instanceCount; uint firstVertex; uint firstInstance;
+} drawCmd;
+
+layout(push_constant) uniform PushConstants {
+    float dt; float time; int state; int push; int pull;
+    uint total_active_count;
+    uint offsets[4]; uint counts[4];
+} pc;
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    if (id >= pc.total_active_count) return;
+
+    // 1. PURE ALU PROCEDURAL MATH
+    // Calculate everything using only the thread ID and Time
+    float fi = float(id);
+    float t = pc.time * 2.0;
+
+    // A chaotic orbital attractor formula
+    float radius = 10000.0 + sin(fi * 0.00001 + t) * 5000.0;
+    float angle1 = fi * 0.002 + t * 0.5;
+    float angle2 = fi * 0.00031 - t * 0.2;
+
+    vec3 finalPos;
+    finalPos.x = cos(angle1) * sin(angle2) * radius;
+    finalPos.y = sin(angle1) * sin(angle2) * radius;
+    finalPos.z = cos(angle2) * radius;
+
+    // Fake the Material ID based on the thread ID to keep the colors alive
+    float materialID = float(id % 4) + fract(finalPos.y * 0.001);
+
+    // 2. WRITE-ONLY EXPORT (Zero memory stalls)
+    outParticles[id].x = finalPos.x;
+    outParticles[id].y = finalPos.y;
+    outParticles[id].z = finalPos.z;
+    outParticles[id].pad = materialID;
+
+    // Standard draw command reset
+    if (id == 0) {
+        drawCmd.vertexCount = pc.total_active_count;
+        drawCmd.instanceCount = 1;
+        drawCmd.firstVertex = 0;
+        drawCmd.firstInstance = 0;
+    }
+}
