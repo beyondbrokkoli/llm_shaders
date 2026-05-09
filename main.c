@@ -903,7 +903,13 @@ int main() {
         pfn_vkCmdPushConstants(cmd, g_gfxLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(CameraPushConstants), &g_cam_pc);
         VkDeviceSize offsets[] = {0};
 
-        VkBuffer unifiedBuffer = (frameIndex % 2 == 0) ? g_buf_swarm_A : g_buf_swarm_B;
+        // CURRENT (INCORRECT): Rendering the same buffer that Compute is writing to!
+        //VkBuffer unifiedBuffer = (frameIndex % 2 == 0) ? g_buf_swarm_A : g_buf_swarm_B;
+        // CORRECT: Render the buffer that Compute IS NOT currently touching.
+        // Even frame (0): Compute writes to A, so we render B.
+        // Odd frame (1): Compute writes to B, so we render A.
+        VkBuffer unifiedBuffer = (frameIndex % 2 == 0) ? g_buf_swarm_B : g_buf_swarm_A;
+
         pfn_vkCmdBindVertexBuffers(cmd, 0, 1, &unifiedBuffer, offsets);
 
         pfn_vkCmdDrawIndirect(cmd, current_buf_cmd, 0, 1, 16);
