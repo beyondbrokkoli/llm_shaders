@@ -39,76 +39,47 @@ void main() {
     uint id = gl_GlobalInvocationID.x;
     if (id >= pc.total_active_count) return;
 
-    vec3 myPos = vec3(inParticles[id].x, inParticles[id].y, inParticles[id].z);
     vec3 finalPos;
     float materialID = 0.0;
 
-    // --- SLICE 0: CPU CORE (The Singularity) ---
-    if (id >= pc.offsets[0] && id < pc.offsets[0] + pc.counts[0]) {
-        finalPos = myPos; 
+    // 1. THE UNIFIED LOOKUP
+    // Map this particle ID back to a CPU particle ID (0 to counts[0]-1)
+    uint target_cpu_id = id % pc.counts[0];
+    vec3 cpuResult = vec3(inParticles[target_cpu_id].x, 
+                          inParticles[target_cpu_id].y, 
+                          inParticles[target_cpu_id].z);
+
+    // 2. THE ZERO-OFFSET ASSIGNMENT
+    if (id < pc.offsets[1]) {
+        // Slice 0: Pure CPU Core
+        finalPos = cpuResult;
         materialID = 0.0 + clamp((finalPos.y + 10000.0) / 20000.0, 0.0, 0.99);
-    }
-    // --- SLICE 1: ELECTRON CLOUD (Radial Fusion) ---
-    else if (id >= pc.offsets[1] && id < pc.offsets[1] + pc.counts[1]) {
-        uint local_id = id - pc.offsets[1];
-        uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
-        vec3 targetPos = vec3(inParticles[target_cpu_id].x, inParticles[target_cpu_id].y, inParticles[target_cpu_id].z);
-
-        uint h = pcg_hash(local_id);
-        float t = pc.time * 3.0 + float(h % 100);
-        vec3 radialDir = vec3(sin(t * 0.7), cos(t * 0.8), sin(t * 1.1));
+    } else {
+        // Slices 1, 2, and 3: GPU "Extra" particles
+        finalPos = cpuResult; // ZERO OFFSET - Perfect overlap with vibemath.c
         
-        // Tight radial distance (20-80 units) keeps them glued to the CPU
-        finalPos = mix(myPos, targetPos + radialDir * (20.0 + (float(h % 1000) / 10.0)), 0.1);
-        materialID = 1.0; 
-    }
-    // --- SLICE 2: MICRONIZED BOIDS ---
-    else if (id >= pc.offsets[2] && id < pc.offsets[2] + pc.counts[2]) {
-        uint local_id = id - pc.offsets[2];
-        uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
-        vec3 anchorPos = vec3(inParticles[target_cpu_id].x, inParticles[target_cpu_id].y, inParticles[target_cpu_id].z);
-
-        uint h = pcg_hash(local_id);
-        float angle = (float(h % 360) * 0.017) + (pc.time * (2.0 + float(h % 5)));
-        vec3 orbitPos = anchorPos + vec3(cos(angle) * 50.0, sin(pc.time) * 20.0, sin(angle) * 50.0);
-
-        finalPos = mix(myPos, orbitPos, 0.05); 
-        materialID = 2.0;
-    }
-    // --- SLICE 3: HAZE ---
-    else {
-        finalPos = myPos; 
-        materialID = 3.0;
+        // We still assign different Material IDs so they can have 
+        // unique colors/brightness in the vertex shader.
+        if (id < pc.offsets[2]) materialID = 1.0;
+        else if (id < pc.offsets[3]) materialID = 2.0;
+        else materialID = 3.0;
     }
 
-    // --- TEMPORAL FUSION (With NaN Guard) ---
-    uint myCell = GetCellIndex(finalPos);
-    uint pastNeighborID = gridP[myCell];
-
-    if (pastNeighborID != 0 && pastNeighborID != (id + 1)) {
-        uint actualNeighborID = pastNeighborID - 1;
-        vec3 intruderPos = vec3(inParticles[actualNeighborID].x, inParticles[actualNeighborID].y, inParticles[actualNeighborID].z);
-
-        vec3 diff = finalPos - intruderPos;
-        float distSq = dot(diff, diff);
-
-        if (distSq > 0.0001) { // THE NaN GUARD
-            finalPos += (diff / sqrt(distSq)) * 5.0; // Soft micro-push
-            materialID = 4.0; // Flash Cyan on fusion
-        }
-    }
-
-    atomicExchange(gridF[myCell], id + 1);
-
+    // 3. EXPORT
     outParticles[id].x = finalPos.x;
     outParticles[id].y = finalPos.y;
     outParticles[id].z = finalPos.z;
     outParticles[id].pad = materialID;
 
+    // Standard draw command reset
     if (id == 0) {
         drawCmd.vertexCount = pc.total_active_count;
         drawCmd.instanceCount = 1;
         drawCmd.firstVertex = 0;
         drawCmd.firstInstance = 0;
     }
+    
+    // Note: We skip the Spatial Grid logic here because if they are 
+    // perfectly overlapping, the atomicExchange will create a massive 
+    // collision stall that we don't need for this "Perfect Fusion" look.
 }
