@@ -480,14 +480,15 @@ EXPORT void vmath_swarm_hopf(int count, float* px, float* py, float* pz, float* 
 
     int i = 0;
     for (; i <= count - 8; i += 8) {
-        __m256 v_px = _mm256_loadu_ps(&px[i]);
-        __m256 v_py = _mm256_loadu_ps(&py[i]);
-        __m256 v_pz = _mm256_loadu_ps(&pz[i]);
+        // RENAMED to cur_p* to avoid clashing with the macro!
+        __m256 cur_px = _mm256_loadu_ps(&px[i]);
+        __m256 cur_py = _mm256_loadu_ps(&py[i]);
+        __m256 cur_pz = _mm256_loadu_ps(&pz[i]);
 
         // 1. Normalize position to "Mathematical Unit Space" around the center
-        __m256 nx = _mm256_mul_ps(_mm256_sub_ps(v_px, v_cx), v_inv_scale);
-        __m256 ny = _mm256_mul_ps(_mm256_sub_ps(v_py, v_cy), v_inv_scale);
-        __m256 nz = _mm256_mul_ps(_mm256_sub_ps(v_pz, v_cz), v_inv_scale);
+        __m256 nx = _mm256_mul_ps(_mm256_sub_ps(cur_px, v_cx), v_inv_scale);
+        __m256 ny = _mm256_mul_ps(_mm256_sub_ps(cur_py, v_cy), v_inv_scale);
+        __m256 nz = _mm256_mul_ps(_mm256_sub_ps(cur_pz, v_cz), v_inv_scale);
 
         // 2. The 4D Hopf Vector Field Equation
         // hx = -ny + nx * nz
@@ -509,17 +510,16 @@ EXPORT void vmath_swarm_hopf(int count, float* px, float* py, float* pz, float* 
         __m256 pull_mask = _mm256_cmp_ps(dist, v_2, _CMP_GT_OQ);
         __m256 pull = _mm256_blendv_ps(_mm256_setzero_ps(), _mm256_mul_ps(v_pull_strength, _mm256_sub_ps(dist, v_2)), pull_mask);
 
-        // Blend the centripetal pull into the vector field
         hx = _mm256_fmadd_ps(nx, pull, hx);
         hy = _mm256_fmadd_ps(ny, pull, hy);
         hz = _mm256_fmadd_ps(nz, pull, hz);
 
         // 4. Set the Spring Target slightly ahead of the current position!
-        __m256 v_tx = _mm256_fmadd_ps(hx, v_flow_speed, v_px);
-        __m256 v_ty = _mm256_fmadd_ps(hy, v_flow_speed, v_py);
-        __m256 v_tz = _mm256_fmadd_ps(hz, v_flow_speed, v_pz);
+        __m256 v_tx = _mm256_fmadd_ps(hx, v_flow_speed, cur_px);
+        __m256 v_ty = _mm256_fmadd_ps(hy, v_flow_speed, cur_py);
+        __m256 v_tz = _mm256_fmadd_ps(hz, v_flow_speed, cur_pz);
 
-        // Apply your boilerplate physics
+        // 5. Macro safely expands without redefining our local variables
         APPLY_SPRING_PHYSICS();
     }
 }
