@@ -207,14 +207,17 @@ function love_update(dt, currentFrame)
     mem.Swarm_MetalBlend = Engine.MetalBlend
     mem.Swarm_ParadoxBlend = Engine.ParadoxBlend
 
-    -- ====================================================
-    -- HARDWARE SYNCHRONIZED TRAFFIC COP
-    -- ====================================================
-    -- 1. Use the hardware-locked frame from C!
-    local active_cpu_idx = currentFrame
+-- ====================================================
+-- HARDWARE SYNCHRONIZED TRAFFIC COP
+-- ====================================================
+-- 1. THE SWAP: Tell the CPU to write to the buffer the GPU ISN'T reading.
+-- If currentFrame (GPU) is 0, CPU writes to 1 (B).
+-- If currentFrame (GPU) is 1, CPU writes to 0 (A).
+    local active_cpu_idx = 1 - currentFrame 
+
     local target_cpu_mapped = (active_cpu_idx == 0) and memory.Mapped["SwarmCPU_A"] or memory.Mapped["SwarmCPU_B"]
 
-    -- 2. Legacy Bind (Ignoring Heterogenous Feedback buffers)
+    -- 2. Bind the "Safe" buffer to the AVX2 translator
     VibeMath.vmath_bind_vulkan_buffers(target_cpu_mapped, nil, nil)
 
     -- 1. The CPU only processes its assigned slice count!
