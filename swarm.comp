@@ -43,73 +43,45 @@ void main() {
     vec3 finalPos;
     float materialID = 0.0;
 
-    // ========================================================
-    // SLICE 0: CPU CORE (The SSOT Singularity)
-    // ========================================================
+    // --- SLICE 0: CPU CORE (The Singularity) ---
     if (id >= pc.offsets[0] && id < pc.offsets[0] + pc.counts[0]) {
-        finalPos = myPos; // Strictly follow CPU math
+        finalPos = myPos; 
         materialID = 0.0 + clamp((finalPos.y + 10000.0) / 20000.0, 0.0, 0.99);
     }
-    // ========================================================
-    // SLICE 1: ELECTRON GLOWS (Strict Radial Attachment)
-    // ========================================================
+    // --- SLICE 1: ELECTRON CLOUD (Radial Fusion) ---
     else if (id >= pc.offsets[1] && id < pc.offsets[1] + pc.counts[1]) {
         uint local_id = id - pc.offsets[1];
-        uint h = pcg_hash(local_id);
-        
         uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
         vec3 targetPos = vec3(inParticles[target_cpu_id].x, inParticles[target_cpu_id].y, inParticles[target_cpu_id].z);
 
-        // Generate a tight radial offset (Electron Cloud style)
-        float t = pc.time * 5.0 + float(h % 100);
+        uint h = pcg_hash(local_id);
+        float t = pc.time * 3.0 + float(h % 100);
         vec3 radialDir = vec3(sin(t * 0.7), cos(t * 0.8), sin(t * 1.1));
         
-        // Very tight radius: 20 to 80 units (almost overlapping the CPU)
-        float tightRadius = 20.0 + (float(h % 1000) / 1000.0) * 60.0;
-        vec3 idealPos = targetPos + radialDir * tightRadius;
-
-        finalPos = mix(myPos, idealPos, 0.15); // High-responsiveness mix
+        // Tight radial distance (20-80 units) keeps them glued to the CPU
+        finalPos = mix(myPos, targetPos + radialDir * (20.0 + (float(h % 1000) / 10.0)), 0.1);
         materialID = 1.0; 
     }
-    // ========================================================
-    // SLICE 2: MICRONIZED BOIDS (Orbiting the same region)
-    // ========================================================
+    // --- SLICE 2: MICRONIZED BOIDS ---
     else if (id >= pc.offsets[2] && id < pc.offsets[2] + pc.counts[2]) {
         uint local_id = id - pc.offsets[2];
         uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
         vec3 anchorPos = vec3(inParticles[target_cpu_id].x, inParticles[target_cpu_id].y, inParticles[target_cpu_id].z);
 
         uint h = pcg_hash(local_id);
-        float speed = 5.0 + (float(h % 10) * 2.0);
-        float angle = (float(h % 360) * 0.0174) + (pc.time * speed);
+        float angle = (float(h % 360) * 0.017) + (pc.time * (2.0 + float(h % 5)));
+        vec3 orbitPos = anchorPos + vec3(cos(angle) * 50.0, sin(pc.time) * 20.0, sin(angle) * 50.0);
 
-        // Shrink the orbit to effectively "not displace" from the anchor
-        float microRadius = 15.0 + (float(h % 50)); 
-        vec3 idealPos = anchorPos + vec3(cos(angle) * microRadius, sin(pc.time * 2.0) * 10.0, sin(angle) * microRadius);
-
-        finalPos = mix(myPos, idealPos, 0.2); 
+        finalPos = mix(myPos, orbitPos, 0.05); 
         materialID = 2.0;
     }
-    // ========================================================
-    // SLICE 3: ATMOSPHERIC HAZE (Short-range rain)
-    // ========================================================
-    else if (id >= pc.offsets[3] && id < pc.offsets[3] + pc.counts[3]) {
-        uint local_id = id - pc.offsets[3];
-        uint h = pcg_hash(local_id);
-        uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
-        vec3 targetPos = vec3(inParticles[target_cpu_id].x, inParticles[target_cpu_id].y, inParticles[target_cpu_id].z);
-
-        // Instead of raining from 40k, they vibrate +/- 100 units vertically around target
-        float verticalJitter = sin(pc.time * 10.0 + float(h % 100)) * 100.0;
-        vec3 idealPos = targetPos + vec3(0.0, verticalJitter, 0.0);
-
-        finalPos = mix(myPos, idealPos, 0.1);
-        materialID = 3.0; 
+    // --- SLICE 3: HAZE ---
+    else {
+        finalPos = myPos; 
+        materialID = 3.0;
     }
 
-    // ========================================================
-    // TEMPORAL FUSION (Tuned for tight spaces)
-    // ========================================================
+    // --- TEMPORAL FUSION (With NaN Guard) ---
     uint myCell = GetCellIndex(finalPos);
     uint pastNeighborID = gridP[myCell];
 
@@ -117,15 +89,12 @@ void main() {
         uint actualNeighborID = pastNeighborID - 1;
         vec3 intruderPos = vec3(inParticles[actualNeighborID].x, inParticles[actualNeighborID].y, inParticles[actualNeighborID].z);
 
-        // Because everyone is in the same region now, we use a much softer repulsion
-        // to prevent the "line to infinity" waterfall.
-        if (id >= pc.offsets[0] && id < pc.offsets[0] + pc.counts[0]) {
-            // CPU singluarity absorbs intruders rather than pushing
-            materialID = 2.0; 
-        } else {
-            // GPU particles flash when they overlap their CPU anchor too much
-            materialID = 4.0; 
-            finalPos += normalize(finalPos - intruderPos) * 10.0; // Tiny micro-push
+        vec3 diff = finalPos - intruderPos;
+        float distSq = dot(diff, diff);
+
+        if (distSq > 0.0001) { // THE NaN GUARD
+            finalPos += (diff / sqrt(distSq)) * 5.0; // Soft micro-push
+            materialID = 4.0; // Flash Cyan on fusion
         }
     }
 
