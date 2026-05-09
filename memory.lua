@@ -21,7 +21,7 @@ local Memory = {
 local MAX_OBJS = 15000000
 
 Memory.Atlas = {
-    CpuCore    = { count = 1000000, offset = 0 },
+    CpuCore    = { count = 5000000, offset = 0 },
     GpuBoids   = { count = 1000000, offset = 0 },
     Static     = { count = 1000000,  offset = 0 }, -- 100k Quantum Grid Nodes
     GpuMeteors = { count = 1000000,  offset = 0 }  -- 100k Raining Meteors

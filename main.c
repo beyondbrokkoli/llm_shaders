@@ -904,11 +904,11 @@ int main() {
         VkDeviceSize offsets[] = {0};
 
         // CURRENT (INCORRECT): Rendering the same buffer that Compute is writing to!
-        //VkBuffer unifiedBuffer = (frameIndex % 2 == 0) ? g_buf_swarm_A : g_buf_swarm_B;
+        VkBuffer unifiedBuffer = (frameIndex % 2 == 0) ? g_buf_swarm_A : g_buf_swarm_B;
         // CORRECT: Render the buffer that Compute IS NOT currently touching.
         // Even frame (0): Compute writes to A, so we render B.
         // Odd frame (1): Compute writes to B, so we render A.
-        VkBuffer unifiedBuffer = (frameIndex % 2 == 0) ? g_buf_swarm_B : g_buf_swarm_A;
+        // VkBuffer unifiedBuffer = (frameIndex % 2 == 0) ? g_buf_swarm_B : g_buf_swarm_A;
 
         pfn_vkCmdBindVertexBuffers(cmd, 0, 1, &unifiedBuffer, offsets);
 
