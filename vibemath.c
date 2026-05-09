@@ -461,6 +461,68 @@ EXPORT void vmath_swarm_smales(int count, float* px, float* py, float* pz, float
         _mm256_storeu_ps(&vz[i], v_vz);
     }
 }
+EXPORT void vmath_swarm_hopf(int count, float* px, float* py, float* pz, float* vx, float* vy, float* vz, float* seed, float cx, float cy, float cz, float time, float dt) {
+    __m256 v_cx = _mm256_set1_ps(cx), v_cy = _mm256_set1_ps(cy), v_cz = _mm256_set1_ps(cz);
+    
+    // Scale dictates how large the torus is in world space
+    __m256 v_inv_scale = _mm256_set1_ps(1.0f / 8000.0f);
+    __m256 v_1 = _mm256_set1_ps(1.0f);
+    __m256 v_2 = _mm256_set1_ps(2.0f);
+    
+    // How strong the vector field pulls them ahead
+    __m256 v_flow_speed = _mm256_set1_ps(12000.0f); 
+    // Gently pulls escapees back to the mathematical bounds
+    __m256 v_pull_strength = _mm256_set1_ps(-0.15f); 
+
+    __m256 v_dt = _mm256_set1_ps(dt);
+    __m256 v_k = _mm256_set1_ps(4.0f * dt);
+    __m256 v_damp = _mm256_set1_ps(0.96f); // Less damping = smoother flow
+
+    int i = 0;
+    for (; i <= count - 8; i += 8) {
+        __m256 v_px = _mm256_loadu_ps(&px[i]);
+        __m256 v_py = _mm256_loadu_ps(&py[i]);
+        __m256 v_pz = _mm256_loadu_ps(&pz[i]);
+
+        // 1. Normalize position to "Mathematical Unit Space" around the center
+        __m256 nx = _mm256_mul_ps(_mm256_sub_ps(v_px, v_cx), v_inv_scale);
+        __m256 ny = _mm256_mul_ps(_mm256_sub_ps(v_py, v_cy), v_inv_scale);
+        __m256 nz = _mm256_mul_ps(_mm256_sub_ps(v_pz, v_cz), v_inv_scale);
+
+        // 2. The 4D Hopf Vector Field Equation
+        // hx = -ny + nx * nz
+        __m256 hx = _mm256_fmadd_ps(nx, nz, _mm256_sub_ps(_mm256_setzero_ps(), ny));
+        // hy = nx + ny * nz
+        __m256 hy = _mm256_fmadd_ps(ny, nz, nx);
+        // hz = 1.0 - nx^2 - ny^2
+        __m256 hz = _mm256_fnmadd_ps(ny, ny, _mm256_fnmadd_ps(nx, nx, v_1));
+
+        // Normalize the resulting field vector using fast hardware inverse-sqrt
+        __m256 mag2 = _mm256_fmadd_ps(hz, hz, _mm256_fmadd_ps(hy, hy, _mm256_mul_ps(hx, hx)));
+        __m256 inv_mag = _mm256_rsqrt_ps(mag2);
+        hx = _mm256_mul_ps(hx, inv_mag);
+        hy = _mm256_mul_ps(hy, inv_mag);
+        hz = _mm256_mul_ps(hz, inv_mag);
+
+        // 3. Centripetal Pull (If distance > 2.0, pull back to center)
+        __m256 dist = _mm256_sqrt_ps(_mm256_fmadd_ps(nz, nz, _mm256_fmadd_ps(ny, ny, _mm256_mul_ps(nx, nx))));
+        __m256 pull_mask = _mm256_cmp_ps(dist, v_2, _CMP_GT_OQ);
+        __m256 pull = _mm256_blendv_ps(_mm256_setzero_ps(), _mm256_mul_ps(v_pull_strength, _mm256_sub_ps(dist, v_2)), pull_mask);
+
+        // Blend the centripetal pull into the vector field
+        hx = _mm256_fmadd_ps(nx, pull, hx);
+        hy = _mm256_fmadd_ps(ny, pull, hy);
+        hz = _mm256_fmadd_ps(nz, pull, hz);
+
+        // 4. Set the Spring Target slightly ahead of the current position!
+        __m256 v_tx = _mm256_fmadd_ps(hx, v_flow_speed, v_px);
+        __m256 v_ty = _mm256_fmadd_ps(hy, v_flow_speed, v_py);
+        __m256 v_tz = _mm256_fmadd_ps(hz, v_flow_speed, v_pz);
+
+        // Apply your boilerplate physics
+        APPLY_SPRING_PHYSICS();
+    }
+}
 EXPORT void vmath_swarm_apply_explosion(int count, float* px, float* py, float* pz, float* vx, float* vy, float* vz, float ex, float ey, float ez, float force, float radius) {
     __m256 v_ex = _mm256_set1_ps(ex), v_ey = _mm256_set1_ps(ey), v_ez = _mm256_set1_ps(ez);
     __m256 v_r2 = _mm256_set1_ps(radius * radius);
@@ -591,17 +653,19 @@ THREAD_FUNC vmath_swarm_worker(void* arg) {
                 case 4: vmath_swarm_gyroscope(chunk_count, mem->Swarm_PX[0] + start_idx, mem->Swarm_PY[0] + start_idx, mem->Swarm_PZ[0] + start_idx, mem->Swarm_VX[0] + start_idx, mem->Swarm_VY[0] + start_idx, mem->Swarm_VZ[0] + start_idx, mem->Swarm_Seed + start_idx, 0, 5000, 0, c_time, c_dt); break;
                 case 5: vmath_swarm_metal(chunk_count, mem->Swarm_PX[0] + start_idx, mem->Swarm_PY[0] + start_idx, mem->Swarm_PZ[0] + start_idx, mem->Swarm_VX[0] + start_idx, mem->Swarm_VY[0] + start_idx, mem->Swarm_VZ[0] + start_idx, mem->Swarm_Seed + start_idx, 0, 5000, 0, c_time, c_dt, mem->Swarm_MetalBlend); break;
                 case 6: vmath_swarm_smales(chunk_count, mem->Swarm_PX[0] + start_idx, mem->Swarm_PY[0] + start_idx, mem->Swarm_PZ[0] + start_idx, mem->Swarm_VX[0] + start_idx, mem->Swarm_VY[0] + start_idx, mem->Swarm_VZ[0] + start_idx, mem->Swarm_Seed + start_idx, 0, 5000, 0, c_time, c_dt, mem->Swarm_ParadoxBlend); break;
+                // --- NEW: THE HOPF FIBRATION ---
+                case 7: vmath_swarm_hopf(chunk_count, mem->Swarm_PX[0] + start_idx, mem->Swarm_PY[0] + start_idx, mem->Swarm_PZ[0] + start_idx, mem->Swarm_VX[0] + start_idx, mem->Swarm_VY[0] + start_idx, mem->Swarm_VZ[0] + start_idx, mem->Swarm_Seed + start_idx, 0, 5000, 0, c_time, c_dt); break;
             }
             // ==========================================
             // PHASE 2: TRANSLATION HOT LOOP (The Pro Version)
             // ==========================================
             for (int i = start_idx; i < end_idx; i++) {
                 // Just write the center once. The GPU handles the "expansion" into 12 vertices.
-                g_gpu_vertex_buffer[i] = (VertexAoS){ 
-                    mem->Swarm_PX[0][i], 
-                    mem->Swarm_PY[0][i], 
-                    mem->Swarm_PZ[0][i], 
-                    jblow_thread_id 
+                g_gpu_vertex_buffer[i] = (VertexAoS){
+                    mem->Swarm_PX[0][i],
+                    mem->Swarm_PY[0][i],
+                    mem->Swarm_PZ[0][i],
+                    jblow_thread_id
                 };
             }
         }

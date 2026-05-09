@@ -183,7 +183,7 @@ function love_update(dt, currentFrame)
     local space_down = love.keyboard.isDown("space")
     if space_down and not Engine.SpacePressedLast then
         Engine.SwarmState = Engine.SwarmState + 1
-        if Engine.SwarmState > 6 then Engine.SwarmState = 0 end
+        if Engine.SwarmState > 7 then Engine.SwarmState = 0 end
         print("[STATE] Swarm Matrix Shifted to State: " .. Engine.SwarmState)
     end
     Engine.SpacePressedLast = space_down
