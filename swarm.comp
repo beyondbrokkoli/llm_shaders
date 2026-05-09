@@ -89,7 +89,7 @@ void main() {
         uint local_id = id - pc.offsets[2];
         uint target_cpu_id = pc.offsets[0] + (local_id % pc.counts[0]);
         vec3 anchorPos = vec3(inParticles[target_cpu_id].x, inParticles[target_cpu_id].y, inParticles[target_cpu_id].z);
-        
+
         uint h = pcg_hash(local_id);
         float rand1 = float(h & 0xFFFF) / 65535.0;
         float rand2 = float((h >> 16) & 0xFFFF) / 65535.0;
@@ -101,6 +101,8 @@ void main() {
         finalPos.x = anchorPos.x + cos(angle) * radius;
         finalPos.y = anchorPos.y + sin(pc.time * 5.0 + float(local_id) * 0.1) * 150.0;
         finalPos.z = anchorPos.z + sin(angle) * radius;
+        
+        materialID = 2.0; // <--- ADD THIS: Un-disguise the Boids! (Purple Traffic)
     }
     // ========================================================
     // SLICE 3: GPU METEORS
@@ -114,8 +116,9 @@ void main() {
         float speed = 8000.0 + (float(h % 1000) / 1000.0) * 12000.0;
         float heightOffset = 30000.0 - mod(pc.time * speed + float(local_id)*50.0, 30000.0);
         finalPos = targetPos + vec3(0.0, heightOffset, 0.0);
+        
+        materialID = 3.0; // <--- ADD THIS: Base Meteor color
     }
-
     // ========================================================
     // THE TEMPORAL LOCKSTEP FUSION
     // ========================================================
